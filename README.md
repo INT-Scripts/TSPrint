@@ -1,1 +1,80 @@
 # TSPrint
+
+A Python client and CLI for the PaperCut printing service (FollowMe).
+
+## Installation
+
+1. Clone the repository.
+2. Install requirements:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+## Configuration
+
+Create a `.env` file in the root directory with your credentials:
+
+```env
+IMPRIMERIE_USER=your_username
+IMPRIMERIE_PASS=your_password
+```
+
+## Usage
+
+You can use the tool via the Command Line Interface (CLI) or as a Python library.
+
+### CLI
+
+The `main.py` script provides several commands:
+
+**Check Login:**
+```bash
+python main.py login
+```
+
+**Upload a File:**
+```bash
+python main.py upload my_document.pdf --copies 2
+```
+
+**List Pending Jobs:**
+```bash
+python main.py jobs
+```
+
+**Release a Job:**
+```bash
+python main.py release --job-name "my_document.pdf"
+# Optionally specify a printer filter
+python main.py release --job-name "my_document.pdf" --printer "MFP"
+```
+
+**Automated Flow (Upload & Release):**
+```bash
+python main.py auto my_document.pdf
+```
+
+### Library
+
+You can import `TSPrintClient` in your own scripts:
+
+```python
+from tsprint.client import TSPrintClient
+from tsprint.exceptions import TSPrintError
+
+client = TSPrintClient("username", "password")
+
+try:
+    client.login()
+    client.upload_file("test.pdf")
+    jobs = client.get_pending_jobs()
+    print(jobs)
+except TSPrintError as e:
+    print(f"An error occurred: {e}")
+```
+
+## Features
+- **Session Management**: Automatically handles cookies and JSESSIONID.
+- **Web Print**: Helper for uploading PDFs.
+- **Job Release**: Check pending jobs and release them to available printers.
+- **Error Handling**: Custom exceptions for clear debugging.
