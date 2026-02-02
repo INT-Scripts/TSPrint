@@ -135,7 +135,70 @@ class TSPrintClient:
 
         data = self._extract_form_data(form)
         data['$RadioGroup'] = str(printer_index) # Select specific printer
+        
+        # Handle strict button logic
+        self._prepare_printer_selection_payload(data, soup)
+        self._extract_csrf(r.text)
+        
+        headers = {'Referer': r.url, 'Origin': self.base_url}
+        if self._csrf_token: headers['X-Csrf-Token'] = self._csrf_token
 
+        action_url = self._resolve_url(form.get('action'))
+        r = self.session.post(action_url, data=data, headers=headers)
+        
+        # 3. Options
+        soup = BeautifulSoup(r.text, 'html.parser')
+        form = soup.find('form')
+        if not form: raise UploadError("No form on Options page.")
+        
+        data = self._extract_form_data(form)
+        data['copies'] = str(copies)
+        self._prepare_options_payload(data, form)
+        
+        headers['Referer'] = r.url
+        action_url = self._resolve_url(form.get('action'))
+        r = self.session.post(action_url, data=data, headers=headers)
+        
+        # 4. Upload Page
+        upload_path = self._find_upload_url(r.text)
+        if not upload_path: raise UploadError("Could not find upload URL.")
+        
+        upload_full_url = self.base_url + upload_path
+        files = {'file': (os.path.basename(file_path), open(file_path, 'rb'), 'application/pdf')}
+        upload_headers = {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Origin': self.base_url,
+            'Referer': r.url
+        }
+        
+        r_upload = self.session.post(upload_full_url, files=files, headers=upload_headers)
+        if r_upload.status_code != 200:
+             raise UploadError(f"Upload failed with status {r_upload.status_code}")
+             
+        # 5. Finalize
+        soup = BeautifulSoup(r.text, 'html.parser')
+        final_form = soup.find('form', id='upload-complete') or soup.find('form')
+        if not final_form:
+            # Maybe the JS submits it? But we need to do it manually.
+            pass 
+            
+        if final_form:
+             data = self._extract_form_data(final_form)
+             # Remove submits
+             submit_keys = [k for k in data if k.startswith('$Submit')]
+             for k in submit_keys: del data[k]
+             
+             action_url = self._resolve_url(final_form.get('action'))
+             headers['Referer'] = r.url
+             self.session.post(action_url, data=data, headers=headers)
+             
+        logger.info("Upload sequence completed.")
+
+    def login(self):
+        """
+        Authenticate with the service.
+
+        Returns:
             bool: True if login is successful.
 
         Raises:
@@ -197,99 +260,7 @@ class TSPrintClient:
         logger.info("Login successful.")
         return True
 
-    def upload_file(self, file_path, copies=1):
-        """
-        Upload a file to Web Print.
 
-        Args:
-            file_path (str): Path to the file.
-            copies (int, optional): Number of copies. Defaults to 1.
-
-        Raises:
-            FileNotFoundError: If file not found.
-            UploadError: If upload fails.
-        """
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"File not found: {file_path}")
-
-        logger.info(f"Starting upload for {file_path}...")
-
-        # 1. Access Web Print
-        web_print_url = f"{self.base_url}/app?service=page/UserWebPrint"
-        r = self._get_page(web_print_url, "Web Print page")
-        soup = BeautifulSoup(r.text, 'html.parser')
-        
-        link = self._find_submit_job_link(soup)
-        if not link:
-             raise UploadError("Could not find 'Envoyer un travail' link.")
-             
-        action_url = self._resolve_url(link['href'])
-        
-        # 2. Printer Selection
-        r = self._get_page(action_url, "Printer Selection")
-        soup = BeautifulSoup(r.text, 'html.parser')
-        form = soup.find('form')
-        if not form: raise UploadError("No form on Printer Selection page.")
-
-        data['$RadioGroup'] = str(printer_index) # Select specific printer
-        
-        # Handle strict button logic
-        self._prepare_printer_selection_payload(data, soup)
-        self._extract_csrf(r.text)
-        
-        headers = {'Referer': r.url, 'Origin': self.base_url}
-        if self._csrf_token: headers['X-Csrf-Token'] = self._csrf_token
-
-        action_url = self._resolve_url(form.get('action'))
-        r = self.session.post(action_url, data=data, headers=headers)
-        
-        # 3. Options
-        soup = BeautifulSoup(r.text, 'html.parser')
-        form = soup.find('form')
-        if not form: raise UploadError("No form on Options page.")
-        
-        data = self._extract_form_data(form)
-        data['copies'] = str(copies)
-        self._prepare_options_payload(data, form)
-        
-        headers['Referer'] = r.url
-        action_url = self._resolve_url(form.get('action'))
-        r = self.session.post(action_url, data=data, headers=headers)
-        
-        # 4. Upload Page
-        upload_path = self._find_upload_url(r.text)
-        if not upload_path: raise UploadError("Could not find upload URL.")
-        
-        upload_full_url = self.base_url + upload_path
-        files = {'file': (os.path.basename(file_path), open(file_path, 'rb'), 'application/pdf')}
-        upload_headers = {
-            'X-Requested-With': 'XMLHttpRequest',
-            'Origin': self.base_url,
-            'Referer': r.url
-        }
-        
-        r_upload = self.session.post(upload_full_url, files=files, headers=upload_headers)
-        if r_upload.status_code != 200:
-             raise UploadError(f"Upload failed with status {r_upload.status_code}")
-             
-        # 5. Finalize
-        soup = BeautifulSoup(r.text, 'html.parser')
-        final_form = soup.find('form', id='upload-complete') or soup.find('form')
-        if not final_form:
-            # Maybe the JS submits it? But we need to do it manually.
-            pass 
-            
-        if final_form:
-             data = self._extract_form_data(final_form)
-             # Remove submits
-             submit_keys = [k for k in data if k.startswith('$Submit')]
-             for k in submit_keys: del data[k]
-             
-             action_url = self._resolve_url(final_form.get('action'))
-             headers['Referer'] = r.url
-             self.session.post(action_url, data=data, headers=headers)
-             
-        logger.info("Upload sequence completed.")
 
 
     def get_pending_jobs(self):
@@ -321,7 +292,38 @@ class TSPrintClient:
                         
                         if print_link:
                             jobs.append({'name': filename, 'link': print_link})
+                            jobs.append({'name': filename, 'link': print_link})
         return jobs
+
+    def get_physical_printers(self, job):
+        """
+        Get list of physical printers available for releasing the job.
+        
+        Args:
+            job (dict): Job object with 'link' key.
+            
+        Returns:
+            list: List of dicts {'name': str, 'status': str, 'link': str}
+        """
+        release_url = self._resolve_url(job['link'])
+        r = self._get_page(release_url, "Job Release Page")
+        
+        soup = BeautifulSoup(r.text, 'html.parser')
+        printer_links = soup.find_all('a', href=re.compile(r'\$ReleaseStationJobs\.\$DirectLink'))
+        
+        printers = []
+        for link in printer_links:
+            row = link.find_parent('tr')
+            if row:
+                status_cell = row.find_all('td')[-1]
+                status_text = status_cell.get_text(strip=True)
+                p_name = link.get_text(strip=True)
+                printers.append({
+                    'name': p_name,
+                    'status': status_text,
+                    'link': link['href']
+                })
+        return printers
 
     def release_job(self, job, printer_name_filter=None):
         """

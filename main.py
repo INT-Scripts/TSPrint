@@ -58,6 +58,33 @@ def cmd_list_webprint(args):
         logger.error(f"Error listing printers: {e}")
         sys.exit(1)
 
+def cmd_list_printers(args):
+    client = get_client()
+    try:
+        client.login()
+        jobs = client.get_pending_jobs()
+        if not jobs:
+             logger.info("No pending jobs found. Cannot check physical printer status.")
+             logger.info("Please upload a document first (e.g. 'uv run main.py upload ...').")
+             return
+             
+        # Use the first job to check printers
+        job = jobs[0]
+        logger.info(f"Checking printers available for job: {job['name']}...")
+        printers = client.get_physical_printers(job)
+        
+        if not printers:
+            logger.info("No physical printers found.")
+        else:
+            logger.info(f"Found {len(printers)} physical printers:")
+            for p in printers:
+                status_icon = "✅" if "OK" in p['status'] else "❌"
+                logger.info(f"  {status_icon} {p['name']} (Status: {p['status']})")
+                
+    except TSPrintError as e:
+        logger.error(f"Error listing physical printers: {e}")
+        sys.exit(1)
+
 def cmd_jobs(args):
     client = get_client()
     try:
@@ -173,6 +200,9 @@ def main():
     # List Web Print Printers
     subparsers.add_parser("list-webprint", help="List available Web Print printers")
 
+    # List Physical Printers (Release Stations)
+    subparsers.add_parser("list-printers", help="List physical printers (requires pending job)")
+
     # Jobs
     subparsers.add_parser("jobs", help="List pending jobs")
 
@@ -198,6 +228,8 @@ def main():
         cmd_login(args)
     elif args.command == "list-webprint":
         cmd_list_webprint(args)
+    elif args.command == "list-printers":
+        cmd_list_printers(args)
     elif args.command == "upload":
         cmd_upload(args)
     elif args.command == "jobs":

@@ -56,6 +56,12 @@ uv run main.py upload my_document.pdf --printer-index 1
 uv run main.py jobs
 ```
 
+**List Physical Printers (Release Stations):**
+*Note: This command requires at least one pending job to work.*
+```bash
+uv run main.py list-printers
+```
+
 **Release a Job:**
 ```bash
 uv run main.py release --job-name "my_document.pdf"
@@ -96,5 +102,6 @@ except TSPrintError as e:
 ## Features
 - **Session Management**: Automatically handles cookies and JSESSIONID.
 - **Web Print**: Helper for uploading PDFs with printer selection (Color/B&W).
+- **Physical Printers**: List actual machines available for releasing jobs (requires pending job).
 - **Job Release**: Check pending jobs and release them to available printers.
 - **Error Handling**: Custom exceptions for clear debugging.
