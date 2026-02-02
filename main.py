@@ -34,13 +34,28 @@ def cmd_upload(args):
     client = get_client()
     try:
         client.login()
-        client.upload_file(args.file, args.copies)
+        client.upload_file(args.file, args.copies, args.printer_index)
         logger.info("File uploaded successfully to Web Print queue.")
     except TSPrintError as e:
         logger.error(f"Upload failed: {e}")
         sys.exit(1)
     except FileNotFoundError as e:
         logger.error(str(e))
+        sys.exit(1)
+
+def cmd_list_webprint(args):
+    client = get_client()
+    try:
+        client.login()
+        printers = client.get_webprint_printers()
+        if not printers:
+             logger.info("No Web Print printers found.")
+        else:
+             logger.info("Available Web Print Printers:")
+             for i, p in enumerate(printers):
+                 logger.info(f"[{i}] {p}")
+    except TSPrintError as e:
+        logger.error(f"Error listing printers: {e}")
         sys.exit(1)
 
 def cmd_jobs(args):
@@ -105,7 +120,8 @@ def cmd_auto(args):
         client.login()
         
         # Upload
-        client.upload_file(args.file, args.copies)
+        # Upload
+        client.upload_file(args.file, args.copies, args.printer_index)
         
         # Poll for job
         logger.info("Waiting for job to appear in release queue...")
@@ -152,6 +168,10 @@ def main():
     upload_parser = subparsers.add_parser("upload", help="Upload a PDF file")
     upload_parser.add_argument("file", help="Path to PDF file")
     upload_parser.add_argument("--copies", type=int, default=1, help="Number of copies")
+    upload_parser.add_argument("--printer-index", type=int, default=0, help="Web Print printer index (0=B&W, etc.)")
+
+    # List Web Print Printers
+    subparsers.add_parser("list-webprint", help="List available Web Print printers")
 
     # Jobs
     subparsers.add_parser("jobs", help="List pending jobs")
@@ -165,12 +185,19 @@ def main():
     auto_parser = subparsers.add_parser("auto", help="Upload and release automatically")
     auto_parser.add_argument("file", help="Path to PDF file")
     auto_parser.add_argument("--copies", type=int, default=1, help="Number of copies")
+    auto_parser.add_argument("--printer-index", type=int, default=0, help="Web Print printer index (0=B&W, etc.)")
     auto_parser.add_argument("--printer", help="Filter for printer name")
+    
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(1)
 
     args = parser.parse_args()
 
     if args.command == "login":
         cmd_login(args)
+    elif args.command == "list-webprint":
+        cmd_list_webprint(args)
     elif args.command == "upload":
         cmd_upload(args)
     elif args.command == "jobs":

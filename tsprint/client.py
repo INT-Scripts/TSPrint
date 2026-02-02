@@ -43,11 +43,99 @@ class TSPrintClient:
         })
         self._csrf_token = None
 
-    def login(self):
+    def get_webprint_printers(self):
         """
-        authenticate with the service.
-
+        Get the list of available Web Print printers (e.g. Black & White, Color).
+        
         Returns:
+            list: List of strings (printer names/labels).
+        """
+        web_print_url = f"{self.base_url}/app?service=page/UserWebPrint"
+        r = self._get_page(web_print_url, "Web Print page")
+        soup = BeautifulSoup(r.text, 'html.parser')
+        
+        link = self._find_submit_job_link(soup)
+        if not link:
+             # If no link, maybe we are already on the printer selection page?
+             # But usually we land on the summary page.
+             raise UploadError("Could not find 'Envoyer un travail' link.")
+             
+        action_url = self._resolve_url(link['href'])
+        
+        # Access Printer Selection page
+        r = self._get_page(action_url, "Printer Selection")
+        soup = BeautifulSoup(r.text, 'html.parser')
+        form = soup.find('form')
+        if not form: raise UploadError("No form on Printer Selection page.")
+
+        # Extract printers from radio buttons
+        # The labels are usually in a table or list associated with the radio inputs.
+        # We need to parse the structure.
+        # Typically: <input type="radio" name="$RadioGroup" value="0" ... /> ... <label>Printer Name</label>
+        # or inside a table row.
+        
+        printers = []
+        radio_inputs = form.find_all('input', type='radio', attrs={'name': '$RadioGroup'})
+        
+        for radio in radio_inputs:
+             # Find the label or text associated
+             # Often it's in a parent 'tr' -> 'td'
+             row = radio.find_parent('tr')
+             if row:
+                 # Look for the cell with the printer name
+                 # It might be in a <label> or just text in a <td>
+                 # Let's try to get all text in the row and clean it up
+                 text = row.get_text(strip=True)
+                 # Remove the radio value if present
+                 printers.append(text)
+             else:
+                 # Fallback: check next sibling
+                 label = radio.find_next('label')
+                 if label:
+                     printers.append(label.get_text(strip=True))
+                 else:
+                     printers.append(f"Printer {radio.get('value')}")
+        
+        return printers
+
+    def upload_file(self, file_path, copies=1, printer_index=0):
+        """
+        Upload a file to Web Print.
+
+        Args:
+            file_path (str): Path to the file.
+            copies (int, optional): Number of copies. Defaults to 1.
+            printer_index (int, optional): Index of the printer to select (0 for B&W, 1 for Color usually).
+
+        Raises:
+            FileNotFoundError: If file not found.
+            UploadError: If upload fails.
+        """
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"File not found: {file_path}")
+
+        logger.info(f"Starting upload for {file_path} (Printer Index: {printer_index})...")
+
+        # 1. Access Web Print
+        web_print_url = f"{self.base_url}/app?service=page/UserWebPrint"
+        r = self._get_page(web_print_url, "Web Print page")
+        soup = BeautifulSoup(r.text, 'html.parser')
+        
+        link = self._find_submit_job_link(soup)
+        if not link:
+             raise UploadError("Could not find 'Envoyer un travail' link.")
+             
+        action_url = self._resolve_url(link['href'])
+        
+        # 2. Printer Selection
+        r = self._get_page(action_url, "Printer Selection")
+        soup = BeautifulSoup(r.text, 'html.parser')
+        form = soup.find('form')
+        if not form: raise UploadError("No form on Printer Selection page.")
+
+        data = self._extract_form_data(form)
+        data['$RadioGroup'] = str(printer_index) # Select specific printer
+
             bool: True if login is successful.
 
         Raises:
@@ -143,8 +231,7 @@ class TSPrintClient:
         form = soup.find('form')
         if not form: raise UploadError("No form on Printer Selection page.")
 
-        data = self._extract_form_data(form)
-        data['$RadioGroup'] = '0' # Default printer
+        data['$RadioGroup'] = str(printer_index) # Select specific printer
         
         # Handle strict button logic
         self._prepare_printer_selection_payload(data, soup)
