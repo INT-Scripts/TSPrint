@@ -4,10 +4,12 @@ A Python client and CLI for the PaperCut printing service (FollowMe).
 
 ## Installation
 
+This project uses [uv](https://github.com/astral-sh/uv) for dependency management.
+
 1. Clone the repository.
-2. Install requirements:
+2. Install dependencies:
    ```bash
-   pip install -r requirements.txt
+   uv sync
    ```
 
 ## Configuration
@@ -25,33 +27,33 @@ You can use the tool via the Command Line Interface (CLI) or as a Python library
 
 ### CLI
 
-The `main.py` script provides several commands:
+Run commands using `uv run`:
 
 **Check Login:**
 ```bash
-python main.py login
+uv run main.py login
 ```
 
 **Upload a File:**
 ```bash
-python main.py upload my_document.pdf --copies 2
+uv run main.py upload my_document.pdf --copies 2
 ```
 
 **List Pending Jobs:**
 ```bash
-python main.py jobs
+uv run main.py jobs
 ```
 
 **Release a Job:**
 ```bash
-python main.py release --job-name "my_document.pdf"
+uv run main.py release --job-name "my_document.pdf"
 # Optionally specify a printer filter
-python main.py release --job-name "my_document.pdf" --printer "MFP"
+uv run main.py release --job-name "my_document.pdf" --printer "MFP"
 ```
 
 **Automated Flow (Upload & Release):**
 ```bash
-python main.py auto my_document.pdf
+uv run main.py auto my_document.pdf
 ```
 
 ### Library
